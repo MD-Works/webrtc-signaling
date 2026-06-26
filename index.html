@@ -317,11 +317,21 @@ function generateRoom() {
   $("room-id").value = Math.random().toString(36).slice(2, 10);
 }
 
+const WORKER_URL_STORAGE_KEY = "p2pchat_worker_url";
+
 function getConfig() {
   WORKER = $("worker-url").value.trim().replace(/\/$/, "");
   ROOM   = $("room-id").value.trim() || "default";
   if (!WORKER) { alert("Enter your Worker URL first."); return false; }
+  try { localStorage.setItem(WORKER_URL_STORAGE_KEY, WORKER); } catch {}
   return true;
+}
+
+function loadSavedWorkerUrl() {
+  try {
+    const saved = localStorage.getItem(WORKER_URL_STORAGE_KEY);
+    if (saved) $("worker-url").value = saved;
+  } catch {}
 }
 
 async function api(path, method = "GET", body = null) {
@@ -599,6 +609,7 @@ function hangup() {
 }
 
 // ── Init ─────────────────────────────────────────────────────────────────────
+loadSavedWorkerUrl();
 generateRoom();
 </script>
 </body>
