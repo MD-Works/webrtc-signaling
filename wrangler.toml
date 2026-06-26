@@ -9,4 +9,4 @@ compatibility_date = "2024-01-01"
 # ──────────────────────────────────────────────────────────────────────────────
 [[kv_namespaces]]
 binding = "SIGNALING_KV"
-id = "YOUR_KV_NAMESPACE_ID"
+id = "dd72e1c954e84d529e21e36618baf23e"
