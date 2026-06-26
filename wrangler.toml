@@ -1,0 +1,12 @@
+name = "webrtc-signaling"
+main = "worker.js"
+compatibility_date = "2024-01-01"
+
+# ── KV Namespace ──────────────────────────────────────────────────────────────
+# 1. Run:  npx wrangler kv:namespace create SIGNALING_KV
+# 2. Copy the id printed and paste it below replacing YOUR_KV_NAMESPACE_ID
+# 3. Run:  npx wrangler deploy
+# ──────────────────────────────────────────────────────────────────────────────
+[[kv_namespaces]]
+binding = "SIGNALING_KV"
+id = "YOUR_KV_NAMESPACE_ID"

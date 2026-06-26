@@ -1,0 +1,605 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>P2P Chat</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #0f0f10;
+    --surface: #1a1a1d;
+    --surface2: #242428;
+    --border: rgba(255,255,255,0.08);
+    --text: #f0f0f0;
+    --muted: #888;
+    --accent: #5b6cf7;
+    --accent-hover: #6e7ef8;
+    --danger: #e05252;
+    --success: #3ecf8e;
+    --radius: 10px;
+    --font: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  }
+
+  body {
+    font-family: var(--font);
+    background: var(--bg);
+    color: var(--text);
+    height: 100dvh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  /* ── Setup screen ── */
+  #setup {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 1.5rem;
+    height: 100%;
+    padding: 2rem;
+  }
+
+  #setup h1 { font-size: 1.6rem; font-weight: 600; letter-spacing: -0.02em; }
+  #setup p  { color: var(--muted); font-size: 0.9rem; text-align: center; max-width: 340px; line-height: 1.6; }
+
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 1.5rem;
+    width: 100%;
+    max-width: 380px;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+  }
+
+  .field label { display: block; font-size: 0.78rem; color: var(--muted); margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.05em; }
+  .field input, .field textarea {
+    width: 100%;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    color: var(--text);
+    font-family: var(--font);
+    font-size: 0.9rem;
+    padding: 0.6rem 0.8rem;
+    outline: none;
+    transition: border-color 0.15s;
+  }
+  .field input:focus, .field textarea:focus { border-color: var(--accent); }
+  .field textarea { resize: vertical; min-height: 72px; font-size: 0.78rem; font-family: monospace; }
+
+  .row { display: flex; gap: 0.6rem; }
+
+  button {
+    background: var(--accent);
+    color: #fff;
+    border: none;
+    border-radius: var(--radius);
+    padding: 0.6rem 1.1rem;
+    font-size: 0.88rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background 0.15s, opacity 0.15s;
+    white-space: nowrap;
+  }
+  button:hover  { background: var(--accent-hover); }
+  button:active { opacity: 0.85; }
+  button.ghost  { background: var(--surface2); color: var(--text); }
+  button.ghost:hover { background: #2e2e34; }
+  button.danger { background: var(--danger); }
+  button:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  .status-dot {
+    display: inline-block;
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: var(--muted);
+    margin-right: 6px;
+    transition: background 0.3s;
+  }
+  .status-dot.connected  { background: var(--success); }
+  .status-dot.connecting { background: #f5a623; }
+
+  /* ── Main chat UI ── */
+  #app { display: none; flex-direction: column; height: 100%; }
+
+  /* top bar */
+  #topbar {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.75rem 1rem;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
+    flex-shrink: 0;
+  }
+  #topbar .room-id { font-size: 0.82rem; color: var(--muted); }
+  #topbar .spacer  { flex: 1; }
+  #media-controls  { display: flex; gap: 0.5rem; }
+
+  .icon-btn {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--text);
+    width: 36px; height: 36px;
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer;
+    font-size: 1rem;
+    transition: background 0.15s;
+    flex-shrink: 0;
+  }
+  .icon-btn:hover    { background: #2e2e34; }
+  .icon-btn.active   { background: var(--accent); border-color: var(--accent); }
+  .icon-btn.muted-on { background: var(--danger); border-color: var(--danger); }
+
+  /* video area */
+  #videos {
+    display: none;
+    gap: 6px;
+    padding: 6px;
+    background: #000;
+    flex-shrink: 0;
+  }
+  #videos.visible { display: flex; }
+  #videos video {
+    flex: 1;
+    border-radius: 8px;
+    background: #111;
+    min-height: 140px;
+    max-height: 220px;
+    object-fit: cover;
+  }
+  #local-video  { transform: scaleX(-1); } /* mirror self */
+
+  /* messages */
+  #messages {
+    flex: 1;
+    overflow-y: auto;
+    padding: 1rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  .msg {
+    max-width: 72%;
+    padding: 0.55rem 0.85rem;
+    border-radius: 14px;
+    font-size: 0.9rem;
+    line-height: 1.5;
+    word-break: break-word;
+  }
+  .msg.me    { align-self: flex-end; background: var(--accent); color: #fff; border-bottom-right-radius: 4px; }
+  .msg.them  { align-self: flex-start; background: var(--surface); border: 1px solid var(--border); border-bottom-left-radius: 4px; }
+  .msg.sys   { align-self: center; color: var(--muted); font-size: 0.78rem; background: none; padding: 0.2rem 0; }
+
+  .msg-meta { font-size: 0.7rem; opacity: 0.6; margin-top: 2px; }
+
+  /* input bar */
+  #inputbar {
+    display: flex;
+    gap: 0.5rem;
+    padding: 0.75rem 1rem;
+    border-top: 1px solid var(--border);
+    background: var(--surface);
+    flex-shrink: 0;
+  }
+  #msg-input {
+    flex: 1;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    color: var(--text);
+    font-family: var(--font);
+    font-size: 0.9rem;
+    padding: 0.6rem 0.8rem;
+    outline: none;
+    resize: none;
+    max-height: 120px;
+    transition: border-color 0.15s;
+  }
+  #msg-input:focus { border-color: var(--accent); }
+
+  /* scrollbar */
+  #messages::-webkit-scrollbar { width: 4px; }
+  #messages::-webkit-scrollbar-track { background: transparent; }
+  #messages::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+
+  /* step flow labels */
+  .step-label {
+    font-size: 0.75rem;
+    color: var(--muted);
+    margin-bottom: 2px;
+  }
+  .divider {
+    display: flex; align-items: center; gap: 0.75rem;
+    color: var(--muted); font-size: 0.78rem;
+  }
+  .divider::before, .divider::after {
+    content: ""; flex: 1;
+    height: 1px; background: var(--border);
+  }
+</style>
+</head>
+<body>
+
+<!-- ══════════════════ SETUP SCREEN ══════════════════ -->
+<div id="setup">
+  <h1>P2P Chat</h1>
+  <p>End-to-end peer-to-peer — text, voice and video. Signaling via Cloudflare.</p>
+
+  <div class="card" id="config-card">
+    <div class="field">
+      <label>Worker URL</label>
+      <input id="worker-url" type="url" placeholder="https://webrtc-signaling.yourname.workers.dev" />
+    </div>
+    <div class="field">
+      <label>Room ID</label>
+      <div class="row">
+        <input id="room-id" type="text" placeholder="my-room-42" style="flex:1" />
+        <button class="ghost" onclick="generateRoom()">Random</button>
+      </div>
+    </div>
+    <div class="row">
+      <button onclick="startCaller()" style="flex:1">📞 Start call (caller)</button>
+      <button class="ghost" onclick="showJoin()" style="flex:1">Join call (callee)</button>
+    </div>
+  </div>
+
+  <!-- callee join panel — hidden initially -->
+  <div class="card" id="join-card" style="display:none">
+    <div class="divider">Waiting for offer…</div>
+    <p style="color:var(--muted);font-size:0.85rem;text-align:center" id="join-status">
+      Polling Cloudflare for offer…
+    </p>
+    <button class="ghost" onclick="cancelJoin()">Cancel</button>
+  </div>
+</div>
+
+<!-- ══════════════════ MAIN APP ══════════════════ -->
+<div id="app">
+  <div id="topbar">
+    <span class="status-dot" id="conn-dot"></span>
+    <span id="conn-label" style="font-size:0.85rem">Connecting…</span>
+    <span class="room-id" id="topbar-room"></span>
+    <div class="spacer"></div>
+    <div id="media-controls">
+      <div class="icon-btn" id="btn-mic"   title="Toggle mic"    onclick="toggleMic()">🎙️</div>
+      <div class="icon-btn" id="btn-cam"   title="Toggle camera" onclick="toggleCam()">📷</div>
+      <div class="icon-btn" id="btn-video" title="Toggle video panel" onclick="toggleVideoPanel()">🎬</div>
+      <div class="icon-btn" title="Hang up" onclick="hangup()" style="background:var(--danger);border-color:var(--danger)">📵</div>
+    </div>
+  </div>
+
+  <div id="videos">
+    <video id="remote-video" autoplay playsinline></video>
+    <video id="local-video"  autoplay playsinline muted></video>
+  </div>
+
+  <div id="messages"></div>
+
+  <div id="inputbar">
+    <textarea id="msg-input" rows="1" placeholder="Message…" onkeydown="onKey(event)"></textarea>
+    <button onclick="sendMsg()" style="height:40px;align-self:flex-end">Send</button>
+  </div>
+</div>
+
+<script>
+// ── Config ──────────────────────────────────────────────────────────────────
+let WORKER = "";
+let ROOM   = "";
+
+// ── State ───────────────────────────────────────────────────────────────────
+let pc          = null;   // RTCPeerConnection
+let dataChannel = null;   // RTCDataChannel for text
+let localStream = null;   // camera + mic stream
+let isCaller    = false;
+let pollTimer   = null;
+let iceBatch    = [];     // local ICE candidates to batch-send
+let iceFlushTimer = null;
+
+const ICE_SERVERS = [
+  { urls: "stun:stun.l.google.com:19302" },
+  { urls: "stun:stun1.l.google.com:19302" },
+];
+
+// ── Utilities ────────────────────────────────────────────────────────────────
+function $(id) { return document.getElementById(id); }
+
+function generateRoom() {
+  $("room-id").value = Math.random().toString(36).slice(2, 10);
+}
+
+function getConfig() {
+  WORKER = $("worker-url").value.trim().replace(/\/$/, "");
+  ROOM   = $("room-id").value.trim() || "default";
+  if (!WORKER) { alert("Enter your Worker URL first."); return false; }
+  return true;
+}
+
+async function api(path, method = "GET", body = null) {
+  const opts = { method, headers: { "Content-Type": "application/json" } };
+  if (body !== null) opts.body = JSON.stringify(body);
+  const r = await fetch(`${WORKER}/room/${ROOM}/${path}`, opts);
+  return r.json();
+}
+
+// ── Setup / Join ─────────────────────────────────────────────────────────────
+function showJoin() {
+  if (!getConfig()) return;
+  $("config-card").style.display = "none";
+  $("join-card").style.display   = "flex";
+  pollForOffer();
+}
+
+function cancelJoin() {
+  clearInterval(pollTimer);
+  $("config-card").style.display = "flex";
+  $("join-card").style.display   = "none";
+}
+
+async function pollForOffer() {
+  $("join-status").textContent = "Polling Cloudflare for offer…";
+  pollTimer = setInterval(async () => {
+    try {
+      const res = await api("offer");
+      if (res.found) {
+        clearInterval(pollTimer);
+        $("join-status").textContent = "Offer received! Connecting…";
+        await startCallee(res.data);
+      }
+    } catch (e) { /* keep polling */ }
+  }, 2000);
+}
+
+// ── PeerConnection setup ─────────────────────────────────────────────────────
+function createPC() {
+  pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
+
+  pc.onicecandidate = ({ candidate }) => {
+    if (!candidate) return;
+    iceBatch.push(candidate.toJSON());
+    clearTimeout(iceFlushTimer);
+    iceFlushTimer = setTimeout(flushIceBatch, 400);
+  };
+
+  async function flushIceBatch() {
+    if (!iceBatch.length) return;
+    const role = isCaller ? "caller" : "callee";
+    await api(`ice/${role}`, "POST", iceBatch);
+    iceBatch = [];
+  }
+
+  pc.oniceconnectionstatechange = () => {
+    const s = pc.iceConnectionState;
+    updateConnStatus(s);
+    if (s === "disconnected" || s === "failed" || s === "closed") stopPolling();
+  };
+
+  pc.ontrack = ({ streams }) => {
+    $("remote-video").srcObject = streams[0];
+  };
+
+  pc.ondatachannel = ({ channel }) => {
+    dataChannel = channel;
+    wireDataChannel();
+  };
+}
+
+function wireDataChannel() {
+  dataChannel.onmessage = ({ data }) => {
+    try {
+      const msg = JSON.parse(data);
+      appendMsg(msg.text, "them", msg.ts);
+    } catch {}
+  };
+  dataChannel.onopen  = () => sysMsg("Connected — messages are peer-to-peer");
+  dataChannel.onclose = () => sysMsg("Connection closed");
+}
+
+// ── Caller flow ──────────────────────────────────────────────────────────────
+async function startCaller() {
+  if (!getConfig()) return;
+  isCaller = true;
+  showApp();
+
+  await getMedia();
+  createPC();
+
+  dataChannel = pc.createDataChannel("chat");
+  wireDataChannel();
+
+  if (localStream) localStream.getTracks().forEach(t => pc.addTrack(t, localStream));
+
+  const offer = await pc.createOffer();
+  await pc.setLocalDescription(offer);
+  await api("offer", "POST", offer);
+
+  sysMsg("Offer sent — waiting for peer to join…");
+  pollTimer = setInterval(pollForAnswer, 2500);
+}
+
+async function pollForAnswer() {
+  try {
+    const res = await api("answer");
+    if (!res.found) return;
+    clearInterval(pollTimer);
+    await pc.setRemoteDescription(new RTCSessionDescription(res.data));
+    sysMsg("Peer joined — establishing connection…");
+    pollForICE("callee");
+  } catch (e) { console.error(e); }
+}
+
+// ── Callee flow ──────────────────────────────────────────────────────────────
+async function startCallee(offer) {
+  isCaller = false;
+  showApp();
+
+  await getMedia();
+  createPC();
+
+  if (localStream) localStream.getTracks().forEach(t => pc.addTrack(t, localStream));
+
+  await pc.setRemoteDescription(new RTCSessionDescription(offer));
+  const answer = await pc.createAnswer();
+  await pc.setLocalDescription(answer);
+  await api("answer", "POST", answer);
+
+  sysMsg("Answer sent — establishing connection…");
+  pollForICE("caller");
+}
+
+// ── ICE polling ──────────────────────────────────────────────────────────────
+let appliedIceCount = 0;
+
+function pollForICE(remoteRole) {
+  const timer = setInterval(async () => {
+    if (!pc || pc.iceConnectionState === "connected") { clearInterval(timer); return; }
+    try {
+      const res = await api(`ice/${remoteRole}`);
+      if (!res.found) return;
+      const candidates = res.data;
+      for (let i = appliedIceCount; i < candidates.length; i++) {
+        await pc.addIceCandidate(new RTCIceCandidate(candidates[i]));
+        appliedIceCount++;
+      }
+    } catch (e) { console.error(e); }
+  }, 1500);
+}
+
+function stopPolling() {
+  clearInterval(pollTimer);
+}
+
+// ── Media ────────────────────────────────────────────────────────────────────
+async function getMedia() {
+  try {
+    localStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: true });
+    $("local-video").srcObject = localStream;
+    $("videos").classList.add("visible");
+  } catch (e) {
+    sysMsg("Camera/mic not available — text only");
+    // continue without media — text still works
+  }
+}
+
+function toggleMic() {
+  if (!localStream) return;
+  const track = localStream.getAudioTracks()[0];
+  if (!track) return;
+  track.enabled = !track.enabled;
+  $("btn-mic").classList.toggle("muted-on", !track.enabled);
+  $("btn-mic").title = track.enabled ? "Mute mic" : "Unmute mic";
+}
+
+function toggleCam() {
+  if (!localStream) return;
+  const track = localStream.getVideoTracks()[0];
+  if (!track) return;
+  track.enabled = !track.enabled;
+  $("btn-cam").classList.toggle("muted-on", !track.enabled);
+}
+
+function toggleVideoPanel() {
+  $("videos").classList.toggle("visible");
+  $("btn-video").classList.toggle("active");
+}
+
+// ── UI helpers ───────────────────────────────────────────────────────────────
+function showApp() {
+  $("setup").style.display = "none";
+  $("app").style.display   = "flex";
+  $("topbar-room").textContent = `Room: ${ROOM}`;
+}
+
+function updateConnStatus(state) {
+  const dot   = $("conn-dot");
+  const label = $("conn-label");
+  const map   = {
+    checking:     ["connecting", "Connecting…"],
+    connected:    ["connected",  "Connected"],
+    completed:    ["connected",  "Connected"],
+    failed:       ["",           "Connection failed"],
+    disconnected: ["",           "Disconnected"],
+  };
+  const [cls, text] = map[state] || ["", state];
+  dot.className   = "status-dot " + cls;
+  label.textContent = text;
+}
+
+function appendMsg(text, who, ts) {
+  const box = $("messages");
+  const d   = document.createElement("div");
+  d.className = "msg " + who;
+
+  const t = document.createElement("div");
+  t.textContent = text;
+  d.appendChild(t);
+
+  if (ts) {
+    const m = document.createElement("div");
+    m.className = "msg-meta";
+    m.textContent = new Date(ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+    d.appendChild(m);
+  }
+
+  box.appendChild(d);
+  box.scrollTop = box.scrollHeight;
+}
+
+function sysMsg(text) {
+  const box = $("messages");
+  const d   = document.createElement("div");
+  d.className = "msg sys";
+  d.textContent = text;
+  box.appendChild(d);
+  box.scrollTop = box.scrollHeight;
+}
+
+// ── Messaging ────────────────────────────────────────────────────────────────
+function sendMsg() {
+  const input = $("msg-input");
+  const text  = input.value.trim();
+  if (!text) return;
+  if (!dataChannel || dataChannel.readyState !== "open") {
+    sysMsg("Not connected yet — hold on…");
+    return;
+  }
+  const ts = Date.now();
+  dataChannel.send(JSON.stringify({ text, ts }));
+  appendMsg(text, "me", ts);
+  input.value = "";
+  input.style.height = "auto";
+}
+
+function onKey(e) {
+  if (e.key === "Enter" && !e.shiftKey) {
+    e.preventDefault();
+    sendMsg();
+  }
+  // auto-grow textarea
+  e.target.style.height = "auto";
+  e.target.style.height = Math.min(e.target.scrollHeight, 120) + "px";
+}
+
+// ── Hang up ──────────────────────────────────────────────────────────────────
+function hangup() {
+  if (pc) { pc.close(); pc = null; }
+  if (localStream) { localStream.getTracks().forEach(t => t.stop()); localStream = null; }
+  stopPolling();
+  try { api("", "DELETE"); } catch {}
+  location.reload();
+}
+
+// ── Init ─────────────────────────────────────────────────────────────────────
+generateRoom();
+</script>
+</body>
+</html>
